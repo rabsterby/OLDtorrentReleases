@@ -12,10 +12,10 @@
 
 DAYS = 60
 USE_MAGNET = False
-SORT_TYPE = "rating"
+SORT_TYPE = "torrentsDate"
 SOCKS_IP = ""
 SOCKS_PORT = 0
-HTML_SAVE_PATH = "/opt/share/www/releases.html"
+HTML_SAVE_PATH = "/var/www/releases.html"
 #HTML_SAVE_PATH = r"C:\Users\Yuri\releases.html"
 
 
