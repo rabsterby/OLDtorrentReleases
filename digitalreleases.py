@@ -422,21 +422,6 @@ def rutorLinks(filmID):
 			else:
 				result["BDRip 1080p"] = item
 			#print("!BDRip 1080p: " + tmpParts[0])
-		elif "WEB-DL 2160" in realName:
-			if "HDR" in tags:
-				if result.get("WEB-DL 2160p HDR") != None:
-					if item["seeders"] > result["WEB-DL 2160p HDR"]["seeders"]:
-						result["WEB-DL 2160p HDR"] = item
-				else:
-					result["WEB-DL 2160p HDR"] = item
-				#print("!WEB-DL 2160p HDR: " + tmpParts[0])
-			else:
-				if result.get("WEB-DL 2160p SDR") != None:
-					if item["seeders"] > result["WEB-DL 2160p SDR"]["seeders"]:
-						result["WEB-DL 2160p SDR"] = item
-				else:
-					result["WEB-DL 2160p SDR"] = item
-				#print("!WEB-DL 2160p SDR: " + tmpParts[0])
 		elif "WEB-DL 1080" in realName:
 			if result.get("WEB-DL 1080p") != None:
 				if item["seeders"] > result["WEB-DL 1080p"]["seeders"]:
@@ -444,20 +429,42 @@ def rutorLinks(filmID):
 			else:
 				result["WEB-DL 1080p"] = item
 			#print("!WEB-DL 1080p: " + tmpParts[0])
-	
-	if result.get("UHD BDRemux HDR") or result.get("UHD BDRemux SDR") or result.get("BDRip-HEVC 1080p") or result.get("BDRip 1080p"):
-		result.pop("WEB-DL 2160p HDR", None)
-		result.pop("WEB-DL 2160p SDR", None)
+		elif "BDRIP-HEVC 720" in realName:
+			if result.get("BDRip-HEVC 720p") != None:
+				if item["seeders"] > result["BDRip-HEVC 720p"]["seeders"]:
+					result["BDRip-HEVC 720p"] = item
+			else:
+				result["BDRip-HEVC 720p"] = item
+			#print("!BDRip-HEVC 720p: " + tmpParts[0])
+		elif "BDRIP 720" in realName:
+			if result.get("BDRip 720p") != None:
+				if item["seeders"] > result["BDRip 720p"]["seeders"]:
+					result["BDRip 720p"] = item
+			else:
+				result["BDRip 720p"] = item
+			#print("!BDRip 720p: " + tmpParts[0])
+		elif "WEB-DL 720" in realName:
+			if result.get("WEB-DL 720p") != None:
+				if item["seeders"] > result["WEB-DL 720p"]["seeders"]:
+					result["WEB-DL 720p"] = item
+			else:
+				result["WEB-DL 720p"] = item
+			#print("!WEB-DL 720p: " + tmpParts[0])	
+			
+	if result.get("BDRip-HEVC 1080p") or result.get("BDRip 1080p") or result.get("BDRip-HEVC 720p") or result.get("BDRip 720p"):
+		result.pop("WEB-DL 720p", None)
 		result.pop("WEB-DL 1080p", None)
 	
 	finalResult = []
 	
 	if result.get("WEB-DL 1080p"):
 		finalResult.append({"link": result["WEB-DL 1080p"]["link"], "magnet": result["WEB-DL 1080p"]["magnet"], "date": result["WEB-DL 1080p"]["date"], "type": "WEB-DL 1080p"})
-	if result.get("WEB-DL 2160p HDR"):
-		finalResult.append({"link": result["WEB-DL 2160p HDR"]["link"], "magnet": result["WEB-DL 2160p HDR"]["magnet"], "date": result["WEB-DL 2160p HDR"]["date"], "type": "WEB-DL 2160p HDR"})
-	elif result.get("WEB-DL 2160p SDR"):
-		finalResult.append({"link": result["WEB-DL 2160p SDR"]["link"], "magnet": result["WEB-DL 2160p SDR"]["magnet"], "date": result["WEB-DL 2160p SDR"]["date"], "type": "WEB-DL 2160p SDR"})
+	if result.get("WEB-DL 720p"):
+		finalResult.append({"link": result["WEB-DL 720p"]["link"], "magnet": result["WEB-DL 720p"]["magnet"], "date": result["WEB-DL 720p"]["date"], "type": "WEB-DL 720p"})
+	if result.get("BDRip 720p"):
+		finalResult.append({"link": result["BDRip 720p"]["link"], "magnet": result["BDRip 720p"]["magnet"], "date": result["BDRip 720p"]["date"], "type": "BDRip 720p"})
+	if result.get("BDRip-HEVC 720p"):
+		finalResult.append({"link": result["BDRip-HEVC 720p"]["link"], "magnet": result["BDRip-HEVC 720p"]["magnet"], "date": result["BDRip-HEVC 720p"]["date"], "type": "BDRip-HEVC 720p"})
 	if result.get("BDRip 1080p"):
 		finalResult.append({"link": result["BDRip 1080p"]["link"], "magnet": result["BDRip 1080p"]["magnet"], "date": result["BDRip 1080p"]["date"], "type": "BDRip 1080p"})
 	if result.get("BDRip-HEVC 1080p"):
