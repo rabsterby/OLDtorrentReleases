@@ -12,15 +12,16 @@ import re
 import operator
 import os
 import binascii
+import urllib.parse
+import http.cookiejar
+import sys
 
 LOAD_DAYS = 60
 USE_MAGNET = True
-SORT_TYPE = "torrentsDate" #rating
+SORT_TYPE = "torrentsDate" #rating #torrentsDate
 MIN_VOTES_KP = 500
 MIN_VOTES_IMDB = 1500
 HTML_SAVE_PATH = "/opt/share/www/releases.html"
-#HTML_SAVE_PATH = r"C:\Users\Yuri\releases.html"
-HTML_SAVE_PATH_LINKS = "/opt/share/www/releases_links.html"
 
 SOCKS5_IP = ""
 SOCKS5_PORT = 9050
@@ -31,8 +32,10 @@ if SOCKS5_IP:
 CONNECTION_ATTEMPTS = 3
 
 RUTOR_BASE_URL = "http://rutor.info"
+#RUTOR_BASE_URL = "http://www.rutorc6mqdinc4cz.onion"
 RUTOR_MONTHS = {"Янв": 1, "Фев": 2, "Мар": 3, "Апр": 4, "Май": 5, "Июн": 6, "Июл": 7, "Авг": 8, "Сен": 9, "Окт": 10, "Ноя": 11, "Дек": 12}
 RUTOR_SEARCH_MAIN = "http://rutor.info/search/{}/{}/300/0/BDRemux|BDRip|(WEB%20DL)%201080p|2160p|1080%D1%80%7C2160%D1%80%7C1080i%20{}"
+#RUTOR_SEARCH_MAIN = "http://www.rutorc6mqdinc4cz.onion/search/{}/{}/300/0/BDRemux|BDRip|(WEB%20DL)%201080p|2160p|1080%D1%80%7C2160%D1%80%7C1080i%20{}"
 
 KINOPOISK_API_IOS_BASE_URL = "https://ma.kinopoisk.ru/ios/5.0.0/"
 KINOPOISK_API_V1_BASE_URL = "https://ma.kinopoisk.ru"
@@ -42,12 +45,17 @@ KINOPOISK_CLIENTID = binascii.b2a_hex(os.urandom(12)).decode('ascii')
 KINOPOISK_UUID = binascii.b2a_hex(os.urandom(16)).decode('ascii')
 KINOPOISK_POSTER_URL = "https://st.kp.yandex.net/images/{}{}width=360"
 
+KINOZAL_SEARCH_BDREMUX = "http://kinozal.tv/browse.php?s=%5E{}&g=3&c=0&v=4&d=0&w=0&t=0&f=0"
+KINOZAL_SEARCH_BDRIP = "http://kinozal.tv/browse.php?s=%5E{}&g=3&c=0&v=3&d=0&w=0&t=0&f=0"
+KINOZAL_USERNAME = ""
+KINOZAL_PASSWORD = ""
+
 def main():
 	print("Дата и время запуска программы: " + str(datetime.datetime.now()) + ".")
 	print("Количество попыток при ошибках соединения: " + str(CONNECTION_ATTEMPTS) + ".")
 	
 	if SOCKS5_IP:
-		print("Для rutor.info будет использоваться прокси-сервер SOCKS5: " + SOCKS5_IP + ":" + str(SOCKS5_PORT) + ".")
+		print("Для rutor.info и kinozal.tv будет использоваться прокси-сервер SOCKS5: " + SOCKS5_IP + ":" + str(SOCKS5_PORT) + ".")
 		
 	print("Проверка доступности rutor.info...")
 	try:
@@ -56,14 +64,14 @@ def main():
 	except:
 		print("Сайт rutor.info недоступен, или изменился его формат данных.")
 		print("Работа программы принудительно завершена.")
-		return
+		return 1
 	else:
 		print("Сайт rutor.info доступен.")
 	
 	print("Анализ раздач...")
 	results = rutorResultsForDays(LOAD_DAYS)
 	movies = convertRutorResults(results)
-	movies.sort(key = operator.itemgetter("torrentsDate"), reverse = True)
+	movies.sort(key = operator.itemgetter(SORT_TYPE), reverse = True)
 	saveHTML(movies, HTML_SAVE_PATH)
 	
 	if "HTML_SAVE_PATH_LINKS" in globals():
@@ -71,7 +79,7 @@ def main():
 		
 	print("Работа программы завершена успешно.")
 	
-	return
+	return 0
 
 def rutorResultsForDays(days):
 	targetDate = datetime.date.today() - datetime.timedelta(days=days)
@@ -93,7 +101,12 @@ def rutorResultsForDays(days):
 		while needMore:
 			pageResults = rutorResultsOnPage(content)
 			for result in pageResults:
+				#if ("Патрик" in result["name"]):
+				#print(result["name"])
 				if result["date"] >= targetDate:
+					#print(result["name"])
+					#if not ("Шутки в сторону" in result["name"]):
+						#continue
 					element = parseRutorElement(result)
 					if not element:
 						continue
@@ -103,6 +116,8 @@ def rutorResultsForDays(days):
 					try:
 						elements = rutorSearchSimilarElements(element, group)
 						elements = rutorFilmIDForElements(elements)
+						#if len(newElements) == 0:
+							#pass
 					except:
 						raise ConnectionError ("Ошибка. Не удалось загрузить данные похожих раздач или загрузить страницу с описанием.")
 					tmpSet.add(element["compareName"])
@@ -128,25 +143,44 @@ def rutorResultsForDays(days):
 	
 def convertRutorResults(rutorResults):
 	targetDate = datetime.date.today() - datetime.timedelta(days=LOAD_DAYS)
-	minPremierDate = datetime.date.today() - datetime.timedelta(days=(365 + LOAD_DAYS))
+	#targetDate = datetime.date.today() - datetime.timedelta(days=65)
+	minPremierDate = datetime.date.today() - datetime.timedelta(days=365)
 	
 	movies = []
 	
+	try:
+		if KINOZAL_USERNAME:
+			opener = kinozalAuth(KINOZAL_USERNAME, KINOZAL_PASSWORD)
+		else:
+			opener = None
+	except:
+		opener = None
+
 	for key, values in rutorResults.items():
 		BDDate = None
+		BDDateLicense = None
 		WBDate = None
 		for value in values:
 			if "BD" in value["type"]:
-				if  not BDDate:
-					BDDate = value["date"]
+				if value["license"]:
+					if  not BDDateLicense:
+						BDDateLicense = value["date"]
+					else:
+						BDDateLicense = min(BDDateLicense, value["date"])
 				else:
-					BDDate = min(BDDate, value["date"])
+					if  not BDDate:
+						BDDate = value["date"]
+					else:
+						BDDate = min(BDDate, value["date"])
 			else:
 				if not WBDate:
 					WBDate = value["date"]
 				else:
 					WBDate = min(WBDate, value["date"])
-		if BDDate:
+		if BDDateLicense:
+			if BDDateLicense < targetDate:
+				continue
+		elif BDDate:
 			if BDDate < targetDate:
 				continue
 		else:
@@ -159,52 +193,76 @@ def convertRutorResults(rutorResults):
 			if value["type"] == "UHD BDRemux":
 				if value["hdr"]:
 					if tr.get("UHD BDRemux HDR") != None:
-						if value["seeders"] > tr["UHD BDRemux HDR"]["seeders"]:
+						if ((not tr["UHD BDRemux HDR"]["license"]) and value["license"]):
 							tr["UHD BDRemux HDR"] = value 
+						elif (tr["UHD BDRemux HDR"]["license"] == False and value["license"] == False) or (tr["UHD BDRemux HDR"]["license"] == True and value["license"] == True):
+							if value["seeders"] > tr["UHD BDRemux HDR"]["seeders"]:
+								tr["UHD BDRemux HDR"] = value 
 					else:
 						tr["UHD BDRemux HDR"] = value
 				else:
 					if tr.get("UHD BDRemux SDR") != None:
-						if value["seeders"] > tr["UHD BDRemux SDR"]["seeders"]:
-							tr["UHD BDRemux SDR"] = value
+						if ((not tr["UHD BDRemux SDR"]["license"]) and value["license"]):
+							tr["UHD BDRemux SDR"] = value 
+						elif (tr["UHD BDRemux SDR"]["license"] == False and value["license"] == False) or (tr["UHD BDRemux SDR"]["license"] == True and value["license"] == True):
+							if value["seeders"] > tr["UHD BDRemux SDR"]["seeders"]:
+								tr["UHD BDRemux SDR"] = value 
 					else:
 						tr["UHD BDRemux SDR"] = value
 			elif value["type"] == "BDRemux":
 				if tr.get("BDRemux") != None:
-					if value["seeders"] > tr["BDRemux"]["seeders"]:
+					if ((not tr["BDRemux"]["license"]) and value["license"]):
 						tr["BDRemux"] = value 
+					elif (tr["BDRemux"]["license"] == False and value["license"] == False) or (tr["BDRemux"]["license"] == True and value["license"] == True):
+						if value["seeders"] > tr["BDRemux"]["seeders"]:
+							tr["BDRemux"] = value 
 				else:
 					tr["BDRemux"] = value
 			elif value["type"] == "BDRip-HEVC":
 				if tr.get("BDRip-HEVC 1080p") != None:
-					if value["seeders"] > tr["BDRip-HEVC 1080p"]["seeders"]:
+					if ((not tr["BDRip-HEVC 1080p"]["license"]) and value["license"]):
 						tr["BDRip-HEVC 1080p"] = value 
+					elif (tr["BDRip-HEVC 1080p"]["license"] == False and value["license"] == False) or (tr["BDRip-HEVC 1080p"]["license"] == True and value["license"] == True):
+						if value["seeders"] > tr["BDRip-HEVC 1080p"]["seeders"]:
+							tr["BDRip-HEVC 1080p"] = value 
 				else:
 					tr["BDRip-HEVC 1080p"] = value
 			elif value["type"] == "BDRip":
 				if tr.get("BDRip 1080p") != None:
-					if value["seeders"] > tr["BDRip 1080p"]["seeders"]:
+					if ((not tr["BDRip 1080p"]["license"]) and value["license"]):
 						tr["BDRip 1080p"] = value 
+					elif (tr["BDRip 1080p"]["license"] == False and value["license"] == False) or (tr["BDRip 1080p"]["license"] == True and value["license"] == True):
+						if value["seeders"] > tr["BDRip 1080p"]["seeders"]:
+							tr["BDRip 1080p"] = value 
 				else:
 					tr["BDRip 1080p"] = value
 			elif value["type"] == "WEB-DL":
 				if value["resolution"] == "2160p":
 					if value["hdr"]:
 						if tr.get("WEB-DL 2160p HDR") != None:
-							if value["seeders"] > tr["WEB-DL 2160p HDR"]["seeders"]:
+							if ((not tr["WEB-DL 2160p HDR"]["license"]) and value["license"]):
 								tr["WEB-DL 2160p HDR"] = value 
+							elif (tr["WEB-DL 2160p HDR"]["license"] == False and value["license"] == False) or (tr["WEB-DL 2160p HDR"]["license"] == True and value["license"] == True):
+								if value["seeders"] > tr["WEB-DL 2160p HDR"]["seeders"]:
+									tr["WEB-DL 2160p HDR"] = value 
 						else:
 							tr["WEB-DL 2160p HDR"] = value
 					else:
 						if tr.get("WEB-DL 2160p SDR") != None:
-							if value["seeders"] > tr["WEB-DL 2160p SDR"]["seeders"]:
-								tr["WEB-DL 2160p SDR"] = value
+							if ((not tr["WEB-DL 2160p SDR"]["license"]) and value["license"]):
+								tr["WEB-DL 2160p SDR"] = value 
+							elif (tr["WEB-DL 2160p SDR"]["license"] == False and value["license"] == False) or (tr["WEB-DL 2160p SDR"]["license"] == True and value["license"] == True):
+								if value["seeders"] > tr["WEB-DL 2160p SDR"]["seeders"]:
+									tr["WEB-DL 2160p SDR"] = value 
 						else:
 							tr["WEB-DL 2160p SDR"] = value
 				else:
 					if tr.get("WEB-DL 1080p") != None:
-						if value["seeders"] > tr["WEB-DL 1080p"]["seeders"]:
+						if ((not tr["WEB-DL 1080p"]["license"]) and value["license"]):
 							tr["WEB-DL 1080p"] = value 
+						elif (tr["WEB-DL 1080p"]["license"] == False and value["license"] == False) or (tr["WEB-DL 1080p"]["license"] == True and value["license"] == True):
+							if value["seeders"] > tr["WEB-DL 1080p"]["seeders"]:
+								tr["WEB-DL 1080p"] = value 
 					else:
 						tr["WEB-DL 1080p"] = value
 		
@@ -216,31 +274,6 @@ def convertRutorResults(rutorResults):
 		if tr.get("UHD BDRemux HDR"):
 			tr.pop("UHD BDRemux SDR", None)
 		
-		finalResult = []
-		
-		if tr.get("WEB-DL 1080p"):
-			finalResult.append({"link": tr["WEB-DL 1080p"]["fileLink"], "magnet": tr["WEB-DL 1080p"]["magnetLink"], "date": tr["WEB-DL 1080p"]["date"], "type": "WEB-DL 1080p"})
-		if tr.get("WEB-DL 2160p HDR"):
-			finalResult.append({"link": tr["WEB-DL 2160p HDR"]["fileLink"], "magnet": tr["WEB-DL 2160p HDR"]["magnetLink"], "date": tr["WEB-DL 2160p HDR"]["date"], "type": "WEB-DL 2160p HDR"})
-		elif tr.get("WEB-DL 2160p SDR"):
-			finalResult.append({"link": tr["WEB-DL 2160p SDR"]["fileLink"], "magnet": tr["WEB-DL 2160p SDR"]["magnetLink"], "date": tr["WEB-DL 2160p SDR"]["date"], "type": "WEB-DL 2160p SDR"})
-		if tr.get("BDRip 1080p"):
-			finalResult.append({"link": tr["BDRip 1080p"]["fileLink"], "magnet": tr["BDRip 1080p"]["magnetLink"], "date": tr["BDRip 1080p"]["date"], "type": "BDRip 1080p"})
-		if tr.get("BDRip-HEVC 1080p"):
-			finalResult.append({"link": tr["BDRip-HEVC 1080p"]["fileLink"], "magnet": tr["BDRip-HEVC 1080p"]["magnetLink"], "date": tr["BDRip-HEVC 1080p"]["date"], "type": "BDRip-HEVC 1080p"})
-		if tr.get("BDRemux"):
-			finalResult.append({"link": tr["BDRemux"]["fileLink"], "magnet": tr["BDRemux"]["magnetLink"], "date": tr["BDRemux"]["date"], "type": "BDRemux"})
-		if tr.get("UHD BDRemux HDR"):
-			finalResult.append({"link": tr["UHD BDRemux HDR"]["fileLink"], "magnet": tr["UHD BDRemux HDR"]["magnetLink"], "date": tr["UHD BDRemux HDR"]["date"], "type": "UHD BDRemux HDR"})
-		elif tr.get("UHD BDRemux SDR"):
-			finalResult.append({"link": tr["UHD BDRemux SDR"]["fileLink"], "magnet": tr["UHD BDRemux SDR"]["magnetLink"], "date": tr["UHD BDRemux SDR"]["date"], "type": "UHD BDRemux SDR"})
-		
-		
-		dates = []
-		for torrent in finalResult:
-			dates.append(torrent["date"])
-		dates.sort()
-
 		print("Загрузка данных для фильма с ID " + values[0]["filmID"] + "...")
 		try:
 			detail = filmDetail(values[0]["filmID"])
@@ -256,8 +289,133 @@ def convertRutorResults(rutorResults):
 			print("Фильм \"" + detail["nameRU"] + "\" слишком старый. Пропуск фильма.")
 			continue
 
+		finalResult = []
+		
+		if (tr.get("WEB-DL 1080p") or tr.get("WEB-DL 2160p HDR") or tr.get("WEB-DL 2160p SDR")) and opener:
+			print("Пробуем найти отсутствующий BDRip 1080p на kinozal.tv...")
+			kName = detail["nameRU"]
+			kNameOriginal = detail["nameOriginal"]
+			if not kNameOriginal:
+				kNameOriginal = kName
+			try:
+				kRes = kinozalSearch({"nameRU" : kName, "nameOriginal":kNameOriginal, "year": detail["year"]}, opener, "BDRip 1080p")
+				if kRes:
+					print("Отсутствующий BDRip 1080p найден на kinozal.tv.")
+					finalResult.append(kRes)
+					tr.pop("WEB-DL 2160p HDR", None)
+					tr.pop("WEB-DL 2160p SDR", None)
+					tr.pop("WEB-DL 1080p", None)
+					if kRes["license"]:
+						BDDateLicense = kRes["date"]
+					else:
+						BDDate = kRes["date"]
+			except:
+				print("Какая-то ошибка при работе с kinozal.tv. Подробная информация о проблемах ещё не добавлена в функцию.")
+		if tr.get("WEB-DL 1080p"):
+			finalResult.append({"link": tr["WEB-DL 1080p"]["fileLink"], "magnet": tr["WEB-DL 1080p"]["magnetLink"], "date": tr["WEB-DL 1080p"]["date"], "type": "WEB-DL 1080p", "license": tr["WEB-DL 1080p"]["license"]})
+		if tr.get("WEB-DL 2160p HDR"):
+			finalResult.append({"link": tr["WEB-DL 2160p HDR"]["fileLink"], "magnet": tr["WEB-DL 2160p HDR"]["magnetLink"], "date": tr["WEB-DL 2160p HDR"]["date"], "type": "WEB-DL 2160p HDR", "license": tr["WEB-DL 2160p HDR"]["license"]})
+		elif tr.get("WEB-DL 2160p SDR"):
+			finalResult.append({"link": tr["WEB-DL 2160p SDR"]["fileLink"], "magnet": tr["WEB-DL 2160p SDR"]["magnetLink"], "date": tr["WEB-DL 2160p SDR"]["date"], "type": "WEB-DL 2160p SDR", "license": tr["WEB-DL 2160p SDR"]["license"]})
+		if tr.get("BDRip 1080p"):
+			finalResult.append({"link": tr["BDRip 1080p"]["fileLink"], "magnet": tr["BDRip 1080p"]["magnetLink"], "date": tr["BDRip 1080p"]["date"], "type": "BDRip 1080p", "license": tr["BDRip 1080p"]["license"]})
+		elif (tr.get("BDRip-HEVC 1080p") or tr.get("BDRemux")) and opener:
+			print("Пробуем найти отсутствующий BDRip 1080p на kinozal.tv...")
+			kName = detail["nameRU"]
+			kNameOriginal = detail["nameOriginal"]
+			if not kNameOriginal:
+				kNameOriginal = kName
+			try:
+				kRes = kinozalSearch({"nameRU" : kName, "nameOriginal":kNameOriginal, "year": detail["year"]}, opener, "BDRip 1080p")
+				if kRes:
+					print("Отсутствующий BDRip 1080p найден на kinozal.tv.")
+					finalResult.append(kRes)
+			except:
+				print("Какая-то ошибка при работе с kinozal.tv. Подробная информация о проблемах ещё не добавлена в функцию.")
+		if tr.get("BDRip-HEVC 1080p"):
+			
+			found = False
+			
+			try:
+				if (not tr["BDRip-HEVC 1080p"]["license"]) and tr["BDRip 1080p"]["license"]:
+					kName = detail["nameRU"]
+					kNameOriginal = detail["nameOriginal"]
+					if not kNameOriginal:
+						kNameOriginal = kName
+					kRes = kinozalSearch({"nameRU" : kName, "nameOriginal":kNameOriginal, "year": detail["year"]}, opener, "BDRip-HEVC 1080p", licenseOnly = True)
+					if kRes:
+						found = True
+						finalResult.append(kRes)
+			except:
+				pass
+			
+			if not found:
+				finalResult.append({"link": tr["BDRip-HEVC 1080p"]["fileLink"], "magnet": tr["BDRip-HEVC 1080p"]["magnetLink"], "date": tr["BDRip-HEVC 1080p"]["date"], "type": "BDRip-HEVC 1080p", "license": tr["BDRip-HEVC 1080p"]["license"]})
+		elif (tr.get("BDRip 1080p") or tr.get("BDRemux")) and opener:
+			print("Пробуем найти отсутствующий BDRip-HEVC 1080p на kinozal.tv...")
+			kName = detail["nameRU"]
+			kNameOriginal = detail["nameOriginal"]
+			if not kNameOriginal:
+				kNameOriginal = kName
+			try:
+				kRes = kinozalSearch({"nameRU" : kName, "nameOriginal":kNameOriginal, "year": detail["year"]}, opener, "BDRip-HEVC 1080p")
+				if kRes:
+					print("Отсутствующий BDRip-HEVC 1080p найден на kinozal.tv.")
+					finalResult.append(kRes)
+			except:
+				print("Какая-то ошибка при работе с kinozal.tv. Подробная информация о проблемах ещё не добавлена в функцию.")
+		if tr.get("BDRemux"):
+			found = False
+			
+			try:
+				if (not tr["BDRemux"]["license"]) and tr["BDRip 1080p"]["license"]:
+					kName = detail["nameRU"]
+					kNameOriginal = detail["nameOriginal"]
+					if not kNameOriginal:
+						kNameOriginal = kName
+					kRes = kinozalSearch({"nameRU" : kName, "nameOriginal":kNameOriginal, "year": detail["year"]}, opener, "BDRemux", licenseOnly = True)
+					if kRes:
+						found = True
+						finalResult.append(kRes)
+			except:
+				pass
+			
+			if not found:
+				finalResult.append({"link": tr["BDRemux"]["fileLink"], "magnet": tr["BDRemux"]["magnetLink"], "date": tr["BDRemux"]["date"], "type": "BDRemux", "license": tr["BDRemux"]["license"]})
+		elif (tr.get("BDRip-HEVC 1080p") or tr.get("BDRip 1080p")) and opener:
+			print("Пробуем найти отсутствующий BDRemux на kinozal.tv...")
+			kName = detail["nameRU"]
+			kNameOriginal = detail["nameOriginal"]
+			if not kNameOriginal:
+				kNameOriginal = kName
+			try:
+				kRes = kinozalSearch({"nameRU" : kName, "nameOriginal":kNameOriginal, "year": detail["year"]}, opener, "BDRemux")
+				if kRes:
+					print("Отсутствующий BDRemux найден на kinozal.tv.")
+					finalResult.append(kRes)
+			except:
+				print("Какая-то ошибка при работе с kinozal.tv. Подробная информация о проблемах ещё не добавлена в функцию.")
+		if tr.get("UHD BDRemux HDR"):
+			finalResult.append({"link": tr["UHD BDRemux HDR"]["fileLink"], "magnet": tr["UHD BDRemux HDR"]["magnetLink"], "date": tr["UHD BDRemux HDR"]["date"], "type": "UHD BDRemux HDR", "license": tr["UHD BDRemux HDR"]["license"]})
+		elif tr.get("UHD BDRemux SDR"):
+			finalResult.append({"link": tr["UHD BDRemux SDR"]["fileLink"], "magnet": tr["UHD BDRemux SDR"]["magnetLink"], "date": tr["UHD BDRemux SDR"]["date"], "type": "UHD BDRemux SDR", "license": tr["UHD BDRemux SDR"]["license"]})
+		
+		dates = []
+		for torrent in finalResult:
+			dates.append(torrent["date"])
+		dates.sort()
+
 		detail["torrents"] = finalResult
 		detail["torrentsDate"] = dates[0]
+		if BDDateLicense:
+			detail["torrentsDate"] = BDDateLicense
+			detail["torrentsDateType"] = "Blu-ray с официальным русским озвучиванием ★"
+		elif BDDate:
+			detail["torrentsDate"] = BDDate
+			detail["torrentsDateType"] = "Blu-ray с официальным русским озвучиванием из VoD"
+		else:
+			detail["torrentsDate"] = WBDate
+			detail["torrentsDateType"] = "VoD с официальным русским озвучиванием"
 		movies.append(detail)
 	
 	return movies
@@ -327,6 +485,43 @@ def loadURLContent(url, headers={}, attempts=CONNECTION_ATTEMPTS, useProxy=False
 		
 	return content
 
+def kinopoiskRating(filmID, useProxy = False):
+	result = {}
+	
+	headers = {}
+	headers["Accept-encoding"] = "gzip"
+	headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:65.0) Gecko/20100101 Firefox/65.0"
+	
+	if useProxy and SOCKS5_IP:
+		proxyHandler = SocksiPyHandler(socks.PROXY_TYPE_SOCKS5, SOCKS5_IP, SOCKS5_PORT)
+		opener = urllib.request.build_opener(proxyHandler)
+	else:
+		opener = urllib.request.build_opener()
+	
+	request = urllib.request.Request("https://rating.kinopoisk.ru/{}.xml".format(filmID), headers=headers)
+	response = opener.open(request)
+	if response.info().get("Content-Encoding") == "gzip":
+		gzipFile = gzip.GzipFile(fileobj=response)
+		content = gzipFile.read().decode(response.info().get_content_charset())
+	else:
+		content = response.read().decode(response.info().get_content_charset())
+	
+	patternKP = re.compile("<kp_rating num_vote=\"([0-9]+)\">([0-9]*\.[0-9]*)</kp_rating>")
+	matches = re.findall(patternKP, content)
+	
+	if len(matches) == 1:
+		result["rating"] = matches[0][1]
+		result["ratingVoteCount"] = matches[0][0]
+	
+	patternIMDb = re.compile("<imdb_rating num_vote=\"([0-9]+)\">([0-9]*\.[0-9]*)</imdb_rating>")
+	matches = re.findall(patternIMDb, content)
+	
+	if len(matches) == 1:
+		result["ratingIMDb"] = matches[0][1]
+		result["ratingIMDbVoteCount"] = matches[0][0]
+	
+	return result
+
 def filmDetail(filmID):
 	result = {}
 	content = None
@@ -367,6 +562,9 @@ def filmDetail(filmID):
 		ratingAgeLimits = itemData.get("ratingAgeLimits")
 		if ratingAgeLimits == None or not isinstance(ratingAgeLimits, str):
 			ratingAgeLimits = ""
+		ratingMPAA = itemData.get("ratingMPAA")
+		if ratingMPAA == None or not isinstance(ratingMPAA, str):
+			ratingMPAA = ""
 		posterURL = itemData.get("posterURL")
 		if posterURL == None or not isinstance(posterURL, str):
 			raise ValueError("Ошибка загрузки данных для filmID " + filmID + ". Проблемы со значением posterURL.")
@@ -432,7 +630,16 @@ def filmDetail(filmID):
 		if (not premierDate) and premiereDigital:
 			premierDate = datetime.datetime.strptime(premiereDigital, "%d.%m.%Y").date()
 			premierType = "digital"
-		
+		videoURL = itemData.get("videoURL")
+		if videoURL == None or not isinstance(videoURL, dict):
+			videoURL == ""
+		else:
+			hdLink = videoURL.get("hd")
+			if hdLink == None or not isinstance(hdLink, str):
+				videoURL == ""
+			else:
+				videoURL = hdLink
+
 		directors = []
 		actors = []
 		
@@ -453,6 +660,34 @@ def filmDetail(filmID):
 						actors.append(person.get("nameRU"))
 	else:
 		raise ValueError("Ошибка загрузки данных для filmID " + filmID + ".")
+	
+	freshRating = {}
+	try:
+		freshRating = kinopoiskRating(filmID)
+	except:
+		pass
+		
+	if freshRating.get("rating") and freshRating.get("ratingVoteCount"):
+		ratingKP = freshRating.get("rating")
+		ratingKPCount = freshRating.get("ratingVoteCount")
+		try:
+			ratingKP = "{0:.1f}".format(float(ratingKP))
+			ratingKPCount = int(ratingKPCount)
+		except:
+			ratingKPCount = 0
+		if ratingKPCount < MIN_VOTES_KP:
+			ratingKP = ""
+	
+	if freshRating.get("ratingIMDb") and freshRating.get("ratingIMDbVoteCount"):
+		ratingIMDb = freshRating.get("ratingIMDb")
+		ratingIMDbCount = freshRating.get("ratingIMDbVoteCount")
+		try:
+			ratingIMDb = "{0:.1f}".format(float(ratingIMDb))
+			ratingIMDbCount = int(ratingIMDbCount)
+		except:
+			ratingIMDbCount = 0
+		if ratingIMDbCount < MIN_VOTES_IMDB:
+			ratingIMDb = ""
 	
 	if ratingIMDb and ratingKP:
 		rating = "{0:.1f}".format((float(ratingKP) + float(ratingIMDb)) / 2.0 + 0.001)
@@ -487,15 +722,19 @@ def filmDetail(filmID):
 	result["country"] = country
 	result["genre"] = genre
 	result["ratingAgeLimits"] = ratingAgeLimits
+	result["ratingMPAA"] = ratingMPAA
 	result["posterURL"] = posterURL
 	result["filmLength"] = filmLength
 	result["ratingKP"] = ratingKP
+	result["ratingKPCount"] = ratingKPCount
 	result["ratingIMDb"] = ratingIMDb
+	result["ratingIMDbCount"] = ratingIMDbCount
 	result["rating"] = rating
 	result["ratingFloat"] = float(rating)
 	result["directors"] = directorsResult
 	result["actors"] = actorsResult
 	result["webURL"] = webURL
+	result["trailerURL"] = videoURL
 	if premierDate:
 		result["premierDate"] = premierDate
 		result["premierType"] = premierType
@@ -536,12 +775,14 @@ def parseRutorElement(dict):
 	
 	fullName = tmpParts[0].strip().upper()
 	tags = set()
+	tagsStr = ""
 	
 	if len(tmpParts) > 1:
 		for i in range(1, len(tmpParts)):
 			moreParts = tmpParts[i].split(",")
 			for tmpPart in moreParts:
 				tags.add(tmpPart.strip().upper())
+				tagsStr = tagsStr + tmpPart.strip().upper() + " "
 	
 	if ("LINE" in tags) or ("UKR" in tags) or ("3D-VIDEO" in tags) or ("60 FPS" in tags) or (("1080" in fullName) and ("HDR" in tags)) or ("UHD BDRIP" in fullName) or ("[" in fullName) or ("]" in fullName):
 		return None
@@ -569,8 +810,10 @@ def parseRutorElement(dict):
 		nameOriginal = nameRU
 	
 	if not RU:
-		if not (("ЛИЦЕНЗИЯ" in tags) or ("ITUNES" in tags) or ("D" in tags) or ("D1" in tags) or ("D2" in tags) or ("НЕВАФИЛЬМ" in tags) or ("ПИФАГОР" in tags) or ("AMEDIA" in tags) or ("МОСФИЛЬМ-МАСТЕР" in tags) or ("СВ-ДУБЛЬ" in tags)):
+		if not (("ЛИЦЕНЗИЯ" in tags) or ("ITUNES" in tags) or ("D" in tags) or ("D1" in tags) or ("D2" in tags) or ("НЕВАФИЛЬМ" in tags) or ("ПИФАГОР" in tags) or ("AMEDIA" in tags) or ("МОСФИЛЬМ-МАСТЕР" in tags) or ("СВ-ДУБЛЬ" in tags) or ("КИРИЛЛИЦА" in tags) or ("АРК-ТВ" in tagsStr) or ("APK-ТВ" in tagsStr) or ("APK-TB" in tagsStr)):
 			return None
+	
+	license = True if ("ЛИЦЕНЗИЯ" in tags) else False
 	
 	if "UHD BDREMUX" in typePart:
 		type = "UHD BDRemux"
@@ -599,7 +842,7 @@ def parseRutorElement(dict):
 		resolution = "1080p"
 	else:
 		return None
-		
+	
 	IMAX = True if (("IMAX" in tags) or ("IMAX EDITION" in tags)) else False
 	OpenMatte = True if ("OPEN MATTE" in tags) else False
 	
@@ -611,13 +854,16 @@ def parseRutorElement(dict):
 		searchPattern = "(^" + convertToAlfaNum(nameRU) + " " + convertToAlfaNum(nameOriginal) + " " + year + ")|(^" + compareName + ")"
 		if len(searchPattern) > 130:
 			searchPattern = "(^" + convertToAlfaNum(nameRU) + " " + convertToAlfaNum(nameOriginal) + " " + year + ")"
+	searchPattern = searchPattern.replace("AND", "and")
+	searchPattern = searchPattern.replace("OR", "or")
 	
-	result = {"date": dict["date"], "torrentName": dict["name"], "fileLink": dict["fileLink"], "magnetLink": dict["magnetLink"], "descriptionLink": dict["descriptionLink"], "size": dict["size"], "seeders": dict["seeders"], "leechers": dict["leechers"], "nameOriginal": nameOriginal, "nameRU": nameRU, "compareName": compareName, "searchPattern": searchPattern, "year": year, "type": type, "resolution": resolution, "hdr": hdr, "IMAX": IMAX, "OpenMatte": OpenMatte}
+	result = {"date": dict["date"], "torrentName": dict["name"], "fileLink": dict["fileLink"], "magnetLink": dict["magnetLink"], "descriptionLink": dict["descriptionLink"], "size": dict["size"], "seeders": dict["seeders"], "leechers": dict["leechers"], "nameOriginal": nameOriginal, "nameRU": nameRU, "compareName": compareName, "searchPattern": searchPattern, "year": year, "type": type, "resolution": resolution, "hdr": hdr, "IMAX": IMAX, "OpenMatte": OpenMatte, "license": license}
 
 	return result
 
 def rutorSearchSimilarElements(element, group):
 	results = []
+	#print(RUTOR_SEARCH_MAIN.format(0, group, quote(element["searchPattern"])))
 	content = loadRutorContent(RUTOR_SEARCH_MAIN.format(0, group, quote(element["searchPattern"])), useProxy=True)
 	try:
 		pageResults = rutorResultsOnPage(content)
@@ -722,7 +968,7 @@ def rutorResultsOnPage(content):
 		
 	return result
 
-def rutorFilmIDForElements(elements):
+def rutorFilmIDForElements(elements, deep = True):
 	kID = None
 	for element in elements:
 		content = loadRutorContent(element["descriptionLink"], useProxy=True)
@@ -747,6 +993,26 @@ def rutorFilmIDForElements(elements):
 	if kID:
 		for element in elements:
 			element["filmID"] = kID
+		return elements
+	else:
+		if not deep:
+			return []
+		
+		try:
+			for element in elements:
+				content = loadRutorContent(element["descriptionLink"], useProxy=True)
+				pageResults = rutorResultsOnPage(content)
+				newElements = rutorFilmIDForElements(pageResults, deep = False)
+				if len(newElements) > 0:
+					kID = newElements[0]["filmID"]
+					break
+		except:
+			return []
+	
+	if kID:
+		for element in elements:
+			element["filmID"] = kID
+		return elements
 	else:
 		return []
 
@@ -773,12 +1039,249 @@ def loadKinopoiskContent(baseURL, requestMethod, CLIENTID=KINOPOISK_CLIENTID, AP
 	
 	return loadURLContent(baseURL + requestMethod, headers=headers, attempts=attempts, useProxy=useProxy)
 
+def kinozalAuth(username, password, useProxy = True):
+	headers = {}
+	headers["Accept-encoding"] = "gzip"
+	headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:65.0) Gecko/20100101 Firefox/65.0"
+	
+	cookiejar = http.cookiejar.CookieJar()
+	
+	if useProxy and SOCKS5_IP:
+		proxyHandler = SocksiPyHandler(socks.PROXY_TYPE_SOCKS5, SOCKS5_IP, SOCKS5_PORT)
+		opener = urllib.request.build_opener(proxyHandler)
+		opener.add_handler(urllib.request.HTTPCookieProcessor(cookiejar))
+	else:
+		opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookiejar))
+	
+	values = {"username":username, "password":password}
+	data = urllib.parse.urlencode(values).encode()
+	
+	request = urllib.request.Request("http://kinozal.tv/takelogin.php", data=data, headers=headers)
+	try:
+		response = opener.open(request)
+	except:
+		response = opener.open(request)
+		
+	cookieSet = set()
+	
+	for cookie in cookiejar:
+		cookieSet.add(cookie.name)
+	
+	if ("pass" in cookieSet) and ("uid" in cookieSet):
+		return opener
+	
+	return None
+
+def kinozalSearch(filmDetail, opener, type, licenseOnly = False):
+	targetDate = datetime.date.today() - datetime.timedelta(days=LOAD_DAYS)
+	headers = {}
+	headers["Accept-encoding"] = "gzip"
+	headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:65.0) Gecko/20100101 Firefox/65.0"
+
+	result = {}
+	DBResults = []
+	PMResults = []
+	
+	if type == "BDRip 1080p" or type == "BDRip-HEVC 1080p":
+		request = urllib.request.Request(KINOZAL_SEARCH_BDRIP.format(quote(filmDetail["nameRU"])), headers=headers)
+	elif type == "BDRemux":
+		request = urllib.request.Request(KINOZAL_SEARCH_BDREMUX.format(quote(filmDetail["nameRU"])), headers=headers)
+	else:
+		return None
+
+	try:
+		response = opener.open(request)
+	except:
+		response = opener.open(request)
+	
+	if response.info().get("Content-Encoding") == "gzip":
+		gzipFile = gzip.GzipFile(fileobj=response)
+		content = gzipFile.read().decode(response.info().get_content_charset())
+	else:
+		content = response.read().decode(response.info().get_content_charset())
+
+	content = content.replace("\n", "")
+	soup = BeautifulSoup(content, 'html.parser')
+	
+	elements = soup.find_all("td", class_=["nam"])
+	
+	if len(elements) == 0:
+		return None
+
+	for element in elements:
+		contents = element.contents
+		if len(contents) != 7:
+			continue
+		
+		fullName = contents[0].get_text(strip=True)
+		torrentLink = contents[0].get("href").strip()
+		seeders = int(contents[3].get_text(strip=True))
+		leechers = int(contents[4].get_text(strip=True))
+		dateStr = contents[5].get_text(strip=True)
+		
+		if "сегодня" in dateStr:
+			torrentDate = datetime.date.today()
+		elif "вчера" in dateStr:
+			torrentDate = datetime.date.today() - datetime.timedelta(days=1)
+		else:
+			patternDate = re.compile("\d{2}.\d{2}.\d{4}")
+			matches = re.findall(patternDate, dateStr)
+			if len(matches) != 1:
+				continue
+			torrentDate = datetime.datetime.strptime(matches[0], "%d.%m.%Y").date()
+		
+		if torrentDate <= targetDate:
+			continue
+			
+		patternID = re.compile("id=(\d+)")
+		matches = re.findall(patternID, torrentLink)
+		if len(matches) != 1:
+			continue
+		kinozalID = matches[0]
+		
+		patternYear = re.compile("/ \d{4} /")
+		match = re.search(patternYear, fullName)
+
+		if not match:
+			continue
+			
+		
+		namesPart = (fullName[:match.end()]).strip().upper().replace("Ё", "Е")
+		typePart = (fullName[match.end():]).strip().upper()
+		
+		year = int(filmDetail["year"])
+		nameRU = filmDetail["nameRU"].upper().replace("Ё", "Е")
+		nameOriginal = filmDetail["nameOriginal"].upper().replace("Ё", "Е")
+		
+		if type == "BDRip 1080p":
+			if not ((nameRU in namesPart) and (nameOriginal in namesPart) and ((str(year) in namesPart) or (str(year - 1) in namesPart) or (str(year + 1) in namesPart)) and ("BDRIP" in typePart) and ("1080P" in typePart)):
+				continue
+			if ("HEVC" in typePart):
+				continue
+		elif type == "BDRemux":
+			if not ((nameRU in namesPart) and (nameOriginal in namesPart) and ((str(year) in namesPart) or (str(year - 1) in namesPart) or (str(year + 1) in namesPart)) and ("REMUX" in typePart) and (("1080P" in typePart) or ("1080I" in typePart))):
+				continue
+		elif type == "BDRip-HEVC 1080p":
+			if not ((nameRU in namesPart) and (nameOriginal in namesPart) and ((str(year) in namesPart) or (str(year - 1) in namesPart) or (str(year + 1) in namesPart)) and ("BDRIP" in typePart) and ("HEVC" in typePart) and ("1080P" in typePart)):
+				continue
+		else:
+			return None
+		
+		if ("3D" in typePart) or ("TS" in typePart) or ("LINE" in typePart):
+			continue
+		
+		request = urllib.request.Request("http://kinozal.tv/details.php?id={}".format(kinozalID), headers=headers)
+		
+		try:
+			response = opener.open(request)
+		except:
+			response = opener.open(request)
+
+		if response.info().get("Content-Encoding") == "gzip":
+			gzipFile = gzip.GzipFile(fileobj=response)
+			content = gzipFile.read().decode(response.info().get_content_charset())
+		else:
+			content = response.read().decode(response.info().get_content_charset())
+		patternTabID = re.compile("<a onclick=\"showtab\({},(\d)\); return false;\" href=\"#\">Релиз</a>".format(kinozalID))
+		matches = re.findall(patternTabID, content)
+		if len(matches) != 1:
+			continue
+
+		request = urllib.request.Request("http://kinozal.tv/get_srv_details.php?id={}&pagesd={}".format(kinozalID, matches[0]), headers=headers)
+		try:
+			response = opener.open(request)
+		except:
+			response = opener.open(request)
+		if response.info().get("Content-Encoding") == "gzip":
+			gzipFile = gzip.GzipFile(fileobj=response)
+			content = gzipFile.read().decode(response.info().get_content_charset())
+		else:
+			content = response.read().decode(response.info().get_content_charset())
+			
+		content = content.upper()
+		pmAudioOK = False
+		
+		if ("ЛИЦЕНЗИЯ" in content) or ("ITUNES" in content) or ("НЕВАФИЛЬМ" in content) or ("ПИФАГОР" in content) or ("AMEDIA" in content) or ("МОСФИЛЬМ-МАСТЕР" in content) or ("СВ-ДУБЛЬ" in content) or ("АРК-ТВ" in content) or ("APK-ТВ" in content) or ("APK-TB" in content) or ("КИРИЛЛИЦА" in content):
+			pmAudioOK = True
+		
+		license = False
+		if ("ЛИЦЕНЗИЯ" in content):
+			license = True
+		
+		if ("RUS TRANSFER" in typePart) or ("РУ" in typePart):
+			license = True
+		
+		if ("ДБ" in typePart) or ("РУ" in typePart):
+			if licenseOnly:
+				if license:
+					DBResults.append({"fullName": fullName, "kinozalID": kinozalID, "torrentDate": torrentDate, "seeders":seeders, "leechers": leechers, "license": license})
+			else:
+				#print(content)
+				#print(license)
+				DBResults.append({"fullName": fullName, "kinozalID": kinozalID, "torrentDate": torrentDate, "seeders":seeders, "leechers": leechers, "license": license})
+		
+		if ("ПМ" in typePart) and pmAudioOK and not (("ДБ" in typePart) or ("РУ" in typePart)):
+			if licenseOnly:
+				if license:
+					PMResults.append({"fullName": fullName, "kinozalID": kinozalID, "torrentDate": torrentDate, "seeders":seeders, "leechers": leechers, "license": license})
+			else:
+				PMResults.append({"fullName": fullName, "kinozalID": kinozalID, "torrentDate": torrentDate, "seeders":seeders, "leechers": leechers, "license": license})
+		
+	if len(DBResults) > 0:
+		DBResults.sort(key = operator.itemgetter("license", "seeders"), reverse = True)
+		if DBResults[0]["seeders"] == 0:
+			#return None
+			DBResults.sort(key = operator.itemgetter("license", "torrentDate"), reverse = True)
+		request = urllib.request.Request("http://kinozal.tv/get_srv_details.php?id={}&action=2".format(DBResults[0]["kinozalID"]), headers=headers)
+		try:
+			response = opener.open(request)
+		except:
+			response = opener.open(request)
+		if response.info().get("Content-Encoding") == "gzip":
+			gzipFile = gzip.GzipFile(fileobj=response)
+			content = gzipFile.read().decode(response.info().get_content_charset())
+		else:
+			content = response.read().decode(response.info().get_content_charset())
+		
+		patternHash = re.compile("[A-F0-9]{40}")
+		match = re.search(patternHash, content)
+	
+		if not match:
+			return None
+		
+		return {"link": "http://dl.kinozal.tv/download.php?id={}".format(DBResults[0]["kinozalID"]), "magnet": "magnet:?xt=urn:btih:{}&dn=kinozal.tv".format(match[0]), "date": DBResults[0]["torrentDate"], "type": type, "license": DBResults[0]["license"]}
+	elif len(PMResults) > 0:
+		PMResults.sort(key = operator.itemgetter("license", "seeders"), reverse = True)
+		if PMResults[0]["seeders"] == 0:
+			#return None
+			PMResults.sort(key = operator.itemgetter("license", "torrentDate"), reverse = True)
+		request = urllib.request.Request("http://kinozal.tv/get_srv_details.php?id={}&action=2".format(PMResults[0]["kinozalID"]), headers=headers)
+		try:
+			response = opener.open(request)
+		except:
+			response = opener.open(request)
+		if response.info().get("Content-Encoding") == "gzip":
+			gzipFile = gzip.GzipFile(fileobj=response)
+			content = gzipFile.read().decode(response.info().get_content_charset())
+		else:
+			content = response.read().decode(response.info().get_content_charset())
+		
+		patternHash = re.compile("[A-F0-9]{40}")
+		match = re.search(patternHash, content)
+	
+		if not match:
+			return None
+		
+		return {"link": "http://dl.kinozal.tv/download.php?id={}".format(PMResults[0]["kinozalID"]), "magnet": "magnet:?xt=urn:btih:{}&dn=kinozal.tv".format(match[0]), "date": PMResults[0]["torrentDate"], "type": type, "license": PMResults[0]["license"]}
+	return None
+
 def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
 	f = open(filePath,'w', encoding='utf-8')
 	html =  """<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="ru-RU">
 <head>
 <meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noarchive, noodp, noydir, nosnippet" />
 <meta content="width=960" name="viewport">
 <title>Новые цифровые релизы</title>
 <style type="text/css">
@@ -788,7 +1291,6 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       width: 100%;
       position: relative;
   }
-
   body {
       background: #e6e6e6;
       color: #333;
@@ -796,11 +1298,9 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       margin: 0;
       padding: 0 0 22px 0;
   }
-
   * {
       outline: 0;
   }
-
   .shadow {
       box-shadow: 0px 10px 20px 0px rgba(0, 0, 0, 0.2);
       width: 850px;
@@ -808,7 +1308,6 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       position: relative;
       z-index: 1;
   }
-
   .block1 {
       width: 850px;
       position: relative;
@@ -826,6 +1325,7 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
     margin-left: 10px;
     margin-right: 10px;
     padding:0;
+    padding-top:10px;
     cursor: pointer;
     text-decoration: dashed underline;
     font-family: tahoma,verdana,arial;
@@ -850,38 +1350,30 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       background-color: #f2f2f2;
       width: 100%;
   }
-
   .block2::before, .block2::after {
       content: "";
       display: table;
   }
-
   .block2::after, .photoInfoTable::after {
       clear: both;
   }
-
   .photoInfoTable::before, .photoInfoTable::after {
       content: "";
       display: table;
   }
-
   .photoInfoTable {
       width: 850px;
       float: left;
   }
-
   .headerFilm h1 {
       margin: 0;
       padding: 0;
   }
-
   .headerFilm {
-      width: 700px;
-      padding: 20px 20px 20px 15px;
+      width: 820px;
+      padding: 20px 15px 20px 15px;
       position: relative;
   }
-
-
   H1.moviename {
       vertical-align: middle;
       padding-left: 0px;
@@ -889,18 +1381,15 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       font-size: 25px;
       font-weight: normal;
   }
-
   H1 {
       font-size: 25px;
       font-weight: normal;
       color: #000;
   }
-
   .headerFilm > span {
       color: #666;
       font-size: 13px;
   }
-
   .film-img-box {
       margin-left: 0;
       position: relative;
@@ -908,23 +1397,19 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       min-height: 205px;
       margin-bottom: 15px;
   }
-
   .film-img-box img {
       border: 0;
   }
-
   .photoBlock {
-      width: 210px;
+      width: 223px;
       padding: 0 0 0 0;
       float: left;
       position: relative;
       font-size: 11px;
   }
-
   .movie-buttons-container {
       margin-bottom: 20px;
   }
-
   .torrentbutton {
       cursor: pointer;
       border: none;
@@ -946,11 +1431,37 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       transition: background-color 0.1s, color 0.1s, border-color 0.1s;
       text-align: center;
       text-decoration: none;
-      width: 160px;
+      width: 170px;
       margin: 10px 0 10px 15px;
       display:inline-block;
   }
-
+  .torrentbuttonstar {
+      cursor: pointer;
+      border: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      border-radius: 3px;
+      color: #fff;
+      display: block;
+      font: 12px Arial, sans-serif;
+      font-weight: normal;
+      line-height: normal;
+      font-weight: bold;
+      height: 35px;
+      line-height: 36px;
+      -webkit-transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+      -moz-transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+      transition: background-color 0.1s, color 0.1s, border-color 0.1s;
+      text-align: center;
+      text-decoration: none;
+      width: 170px;
+      margin: 10px 0 10px 15px;
+      display:inline-block;
+      background: #f60 no-repeat url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAzMS4y MDEgMjkuNjc2Jz48cG9seWdvbiBwb2ludHM9JzE1LjYwMiwwIDE5LjMyNSwxMS4yNzkgMzEuMiwx MS4zMzIgMjEuNjI0LDE4LjM2IDI1LjI0MywyOS42NzYgMTUuNjAyLDIyLjczOCA1Ljk2LDI5LjY3 NiA5LjU3NywxOC4zNiAwLDExLjMzMiAxMS44NzgsMTEuMjc5JyBmaWxsPScjRkZGRkZGJyAvPjwv c3ZnPg==");
+      background-size: 10px 10px;
+      background-position: 3px 3px;
+  }
   .trailersbutton {
       cursor: pointer;
       border: none;
@@ -972,49 +1483,43 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       transition: background-color 0.1s, color 0.1s, border-color 0.1s;
       text-align: center;
       text-decoration: none;
-      width: 160px;
+      width: 170px;
       margin: 10px 0 10px 15px;
       display:inline-block;
   }
-
   .infoTable {
       float: left;
       display: block;
   }
-
   .infoTable .info {
-      width: 465px;
+      width: 610px;
   }
-
   .info, .info * {
       border-collapse: collapse;
       margin: 0;
       padding: 0;
   }
-
   .info tr {
       border-bottom: #DFDFDF solid 1px; 
+      font-family: tahoma,verdana,arial;
+      font-size: 13px;
   }
-
   .info .type {
       color: #f60;
-      width: 119px;
-      padding-left: 23px;
+      width: 140px;
+      padding-left: 27px;
   }
-
   .info td {
       min-height: 14px;
       vertical-align: top;
       padding-bottom: 9px;
       padding: 6px 0 6px 20px;
   }
-
   td {
       font-family: tahoma,verdana,arial;
-      font-size: 11px;
+      font-size: 13px;
       color: #000;
   }
-
   .film-rating {
       border-radius: 1px;
       position: absolute;
@@ -1031,12 +1536,27 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       text-align: center;
       font-family: Arial,Tahoma,Verdana,sans-serif;
   }
+  div.tddata {
+      font-family: tahoma,verdana,arial;
+      font-size: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      overflow: hidden;
+      width:423px;
+  }
+  div.description {
+      font-family: tahoma,verdana,arial;
+      font-size: 13px;
+      color: #000;
+      padding-top: 20px;
+      padding-bottom: 20px;
+      width:610px;
+  }
 </style>
 <script>
 function sortElements(sortType){
     var container = document.getElementsByClassName('block1')[0];
     var newContainer = container.cloneNode(false);
-
     var items = [];
     for(var i = container.childNodes.length; i--;){
         if(container.childNodes[i].nodeName === 'DIV')
@@ -1059,7 +1579,6 @@ function sortElements(sortType){
         newContainer.appendChild(items[i]);
     container.parentNode.replaceChild(newContainer, container);
 }
-
 function sortRating(){
     element = document.getElementById("sortButton1");
     style = getComputedStyle(element);
@@ -1070,7 +1589,6 @@ function sortRating(){
     document.getElementById("sortButton2").style.color = "black";
     document.getElementById("sortButton1").style.color = "#f60";
 }
-
 function sortTorrentsDate(){
     element = document.getElementById("sortButton2");
     style = getComputedStyle(element);
@@ -1094,12 +1612,13 @@ function sortTorrentsDate(){
                 <tr>
                   <td class="type">{}</td>
                   <td>
-                    <div style="position: relative">
+                    <div class="tddata" style="position: relative">
                         {}
                     </div>
                   </td>
                 </tr>"""
 	buttonsTemplate = """          <button class="torrentbutton" style="" onclick="location.href='{}'">{}</button>"""
+	buttonsTemplateS = """          <button class="torrentbuttonstar" style="" onclick="location.href='{}'">{}</button>"""
 	movieTemplate = """      <div class="block2" data-releaseDate="{}" data-torrentDate="{}" data-rating="{}" data-comboDate="{}">
         <div class="photoInfoTable">
           <div class="headerFilm">
@@ -1108,8 +1627,8 @@ function sortTorrentsDate(){
           </div>
           <div class="photoBlock">
             <div class="film-img-box">
-              <div class="film-rating" style="background-color: {};">{}</div> 
-              <img src="{}" alt="{}" itemprop="image" width="205"></img>
+              <div class="film-rating" style="{}">{}</div> 
+              <img src="{}" alt="{}" itemprop="image" width="218"></img>
             </div>
             <div class="movie-buttons-container">
               <button class="trailersbutton" style="" onclick="window.open('{}','_blank');">Трейлеры</button>
@@ -1121,6 +1640,7 @@ function sortTorrentsDate(){
 {}
               </tbody>
             </table>
+            <div class="description" style="position: relative;">{}</div>
           </div>
         </div>
         <div class="movie-buttons-container">
@@ -1137,60 +1657,105 @@ function sortTorrentsDate(){
 		descriptionBlock += descriptionTemplate.format("актёры", movie["actors"])
 		descriptionBlock += descriptionTemplate.format("жанр", movie["genre"])
 		if len(movie["ratingAgeLimits"]) > 0:
-			if int(movie["ratingAgeLimits"]) < 6:
-				descriptionBlock += descriptionTemplate.format("возраст", "0+")
-			elif int(movie["ratingAgeLimits"]) < 12:
-				descriptionBlock += descriptionTemplate.format("возраст", "6+")
-			elif int(movie["ratingAgeLimits"]) < 16:
-				descriptionBlock += descriptionTemplate.format("возраст", "12+")
-			elif int(movie["ratingAgeLimits"]) <= 18:
-				descriptionBlock += descriptionTemplate.format("возраст", "16+")
+			try:
+				if int(movie["ratingAgeLimits"]) < 6:
+					descriptionBlock += descriptionTemplate.format("возраст", "любой")
+				elif int(movie["ratingAgeLimits"]) < 12:
+					descriptionBlock += descriptionTemplate.format("возраст", "от 6 лет")
+				elif int(movie["ratingAgeLimits"]) < 16:
+					descriptionBlock += descriptionTemplate.format("возраст", "от 12 лет")
+				elif int(movie["ratingAgeLimits"]) < 18:
+					descriptionBlock += descriptionTemplate.format("возраст", "от 16 лет")
+				else:
+					descriptionBlock += descriptionTemplate.format("возраст", "от 18 лет")
+			except:
+				pass
+		elif len(movie["ratingMPAA"]) > 0:
+			if movie["ratingMPAA"] == "G":
+				descriptionBlock += descriptionTemplate.format("возраст", "любой")
+			elif movie["ratingMPAA"] == "PG":
+				descriptionBlock += descriptionTemplate.format("возраст", "от 6 лет")
+			elif movie["ratingMPAA"] == "PG-13":
+				descriptionBlock += descriptionTemplate.format("возраст", "от 12 лет")
+			elif movie["ratingMPAA"] == "R":
+				descriptionBlock += descriptionTemplate.format("возраст", "от 16 лет")
 			else:
-				descriptionBlock += descriptionTemplate.format("возраст", "18+")
+				descriptionBlock += descriptionTemplate.format("возраст", "от 18 лет")
 		descriptionBlock += descriptionTemplate.format("продолжительность", movie["filmLength"])
+		
 		if len(movie["ratingKP"]) > 0:
 			rKP = movie["ratingKP"]
 		else:
-			rKP = "нет (возможно, мало голосов)"
+			if movie["ratingKPCount"] == 0:
+				rKP = "нет"
+			elif movie["ratingKPCount"] < MIN_VOTES_KP:
+				rKP = "мало голосов"
+			else:
+				rKP = "нет"
+		
 		descriptionBlock += descriptionTemplate.format("рейтинг КиноПоиск", "<a href=\"{}\" style=\"text-decoration: underline; color:black\" target=\"_blank\">{}</a>".format(movie["webURL"], rKP))
+		
 		if len(movie["ratingIMDb"]) > 0:
-			descriptionBlock += descriptionTemplate.format("рейтинг IMDb", movie["ratingIMDb"])
+			rIMDb = movie["ratingIMDb"]
 		else:
-			descriptionBlock += descriptionTemplate.format("рейтинг IMDb", "нет (возможно, мало голосов)")
+			if movie["ratingIMDbCount"] == 0:
+				rIMDb = "нет"
+			elif movie["ratingIMDbCount"] < MIN_VOTES_IMDB:
+				rIMDb = "мало голосов"
+			else:
+				rIMDb = "нет"
+		
+		descriptionBlock += descriptionTemplate.format("рейтинг IMDb", rIMDb)
+		
+		# if len(movie["ratingIMDb"]) > 0:
+			# descriptionBlock += descriptionTemplate.format("рейтинг IMDb", movie["ratingIMDb"])
+		# else:
+			# descriptionBlock += descriptionTemplate.format("рейтинг IMDb", "нет (возможно, мало голосов)")
+			
 		prHeader = "премьера"
 		if movie["premierType"] == "digital":
 			prHeader = "цифровая премьера"
 		elif movie["premierType"] == "ru":
 			prHeader = "премьера в России"
 		descriptionBlock += descriptionTemplate.format(prHeader, movie["premierDate"].strftime("%d.%m.%Y"))
-		descriptionBlock += descriptionTemplate.format("торрент-релиз", "<a href=\"{}\" style=\"text-decoration: underline; color:black\" target=\"_blank\">{}</a>".format("http://rutor.info/search/0/0/010/0/film%20" + movie["filmID"], movie["torrentsDate"].strftime("%d.%m.%Y")))
-		descriptionBlock += descriptionTemplate.format("описание", movie["description"])
+		#descriptionBlock += descriptionTemplate.format("торрент-релиз", "<a href=\"{}\" style=\"text-decoration: underline; color:black\" target=\"_blank\">{}</a> ({})".format("http://rutor.info/search/0/0/010/0/film%20" + movie["filmID"], movie["torrentsDate"].strftime("%d.%m.%Y"), movie["torrentsDateType"]))
+		descriptionBlock += descriptionTemplate.format("торрент-релиз", "{}".format(movie["torrentsDate"].strftime("%d.%m.%Y")))
+		#descriptionBlock += descriptionTemplate.format("описание", movie["description"])
+		descriptionBlock += descriptionTemplate.format("тип торрент-релиза", movie["torrentsDateType"])
 		
 		
 		torrents = movie["torrents"]
 		buttonsBlock = "" 
 		for torrent in torrents:
-			if useMagnet:
-				buttonsBlock += buttonsTemplate.format(torrent["magnet"], torrent["type"])
+			if torrent["license"]:
+				if useMagnet:
+					buttonsBlock += buttonsTemplateS.format(torrent["magnet"], torrent["type"])
+				else:
+					buttonsBlock += buttonsTemplateS.format(torrent["link"], torrent["type"])
 			else:
-				buttonsBlock += buttonsTemplate.format(torrent["link"], torrent["type"])
+				if useMagnet:
+					buttonsBlock += buttonsTemplate.format(torrent["magnet"], torrent["type"])
+				else:
+					buttonsBlock += buttonsTemplate.format(torrent["link"], torrent["type"])
 		
 		displayOrigName = "display: none;"
 		if len(movie["nameOriginal"]) > 0:
 			displayOrigName = ""
 		
-		ratingColor = "#aaa"
+		ratingStyle = "background-color: #aaa;"
 		if movie["ratingFloat"] >= 7:
-			ratingColor = "#3bb33b"
+			ratingStyle = "background-color: #3bb33b;"
 		elif movie["ratingFloat"] < 5.5:
-			ratingColor = "#b43c3c"
+			ratingStyle = "background-color: #b43c3c;"
 		
 		rating = movie["rating"]
 		if movie["ratingFloat"] < 1:
+			ratingStyle = "display: none;"
 			rating = "—"
 		
-		html += movieTemplate.format(movie["torrentsDate"].strftime("%Y-%m-%d"), movie["torrentsDate"].strftime("%Y-%m-%d"), movie["rating"], movie["torrentsDate"].strftime("%Y-%m-%d"), movie["nameRU"], displayOrigName, movie["nameOriginal"], ratingColor, rating, movie["posterURL"], movie["nameRU"], "https://www.kinopoisk.ru/film/{}/video/".format(movie["filmID"]), descriptionBlock, buttonsBlock)
+		html += movieTemplate.format(movie["torrentsDate"].strftime("%Y-%m-%d"), movie["torrentsDate"].strftime("%Y-%m-%d"), movie["rating"], movie["torrentsDate"].strftime("%Y-%m-%d"), movie["nameRU"], displayOrigName, movie["nameOriginal"], ratingStyle, rating, movie["posterURL"], movie["nameRU"], "https://www.kinopoisk.ru/film/{}/video/".format(movie["filmID"]), descriptionBlock, movie["description"], buttonsBlock)
 		
+		#html += movieTemplate.format(movie["torrentsDate"].strftime("%Y-%m-%d"), movie["torrentsDate"].strftime("%Y-%m-%d"), movie["rating"], movie["torrentsDate"].strftime("%Y-%m-%d"), movie["nameRU"], displayOrigName, movie["nameOriginal"], ratingStyle, rating, movie["posterURL"], movie["nameRU"], movie["trailerURL"], descriptionBlock, movie["description"], buttonsBlock)
 	html += """    </div>
   </div>
 </body>
@@ -1198,5 +1763,10 @@ function sortTorrentsDate(){
 	f.write(html)
 	f.close()
 	return 
+
+try:
+	exitCode = main()
+except:
+	exitCode = 1
 	
-main()
+sys.exit(exitCode)
