@@ -1,6 +1,6 @@
 ### DAYS — за сколько последних дней загружать цифровые релизы. По умолчанию 60.
 ### SOCKS_IP и SOCKS_PORT — IP-адрес и порт SOCKS Proxy. Если они указаны, то будет импортирована библиотека (PySocks), а в функции rutorLinks запросы будет обрабатываться через указанный прокси-сервер. В digitalReleases и filmDetail запросы всегда идут без прокси.
-### SORT_TYPE — тип финальной сортировки. rating — сортировка по рейтингу, releaseDate — сортировка по дате цифрового релиза, torrentsDate — сортировка по дате появления торрента, comboDate — сортировка по комбинированное дате (наибольшая из releaseDate и torrentsDate).
+### SORT_TYPE — тип финальной сортировки. rating — сортировка по рейтингу, releaseDate — сортировка по дате цифрового релиза, torrentsDate — сортировка по дате появления торрента.
 ### USE_MAGNET — использование Magnet-ссылок вместо ссылок на торрент-файлы.
 
 
@@ -15,7 +15,7 @@ USE_MAGNET = False
 SORT_TYPE = "torrentsDate"
 SOCKS_IP = ""
 SOCKS_PORT = 0
-HTML_SAVE_PATH = "/var/www/releases.html"
+HTML_SAVE_PATH = "/var/www/html/releases.html"
 #HTML_SAVE_PATH = r"C:\Users\Yuri\releases.html"
 
 
@@ -49,6 +49,7 @@ def digitalReleases(days):
 	rDict = {}
 	result = []
 	
+	DateTimeNow = datetime.datetime.today().strftime("%Y.%m.%d. - %H:%M")
 	currentDateReal = datetime.date.today()
 	currentDate = currentDateReal + datetime.timedelta(days=7)
 
@@ -479,7 +480,7 @@ def saveHTML(movies, filePath):
 <html xmlns="http://www.w3.org/1999/xhtml" lang="ru-RU">
 <head>
 <meta charset="utf-8">
-<meta content="width=960" name="viewport">
+<meta content="width=1280" name="viewport">
 <title>Новые цифровые релизы</title>
 <style type="text/css">
   html {
@@ -503,14 +504,14 @@ def saveHTML(movies, filePath):
 
   .shadow {
       box-shadow: 0px 10px 20px 0px rgba(0, 0, 0, 0.2);
-      width: 850px;
+      width: 1280px;
       margin: 0 auto;
       position: relative;
       z-index: 1;
   }
 
   .block1 {
-      width: 850px;
+      width: 1280px;
       position: relative;
       margin: 0 auto;
   }
@@ -532,13 +533,11 @@ def saveHTML(movies, filePath):
     font-size: 13px;
   }
 """
-	if (SORT_TYPE == "releaseDate"):
+	if (SORT_TYPE == "rating"):
 		html += """  #sortButton1 {
-  }
-  #sortButton2 {
   color: #f60;
   }
-  #sortButton4 {
+  #sortButton2 {
   }
   #sortButton3 {
   }"""
@@ -547,28 +546,14 @@ def saveHTML(movies, filePath):
   }
   #sortButton2 {
   }
-  #sortButton4 {
-  }
   #sortButton3 {
   color: #f60;
-  }"""
-	elif (SORT_TYPE == "comboDate"):
-		html += """  #sortButton1 {
-  }
-  #sortButton2 {
-  }
-  #sortButton4 {
-  color: #f60;
-  }
-  #sortButton3 {
   }"""
 	else:
 		html += """  #sortButton1 {
-  color: #f60;
   }
   #sortButton2 {
-  }
-  #sortButton4 {
+  color: #f60;
   }
   #sortButton3 {
   }"""
@@ -594,7 +579,7 @@ def saveHTML(movies, filePath):
   }
 
   .photoInfoTable {
-      width: 850px;
+      width: 1280px;
       float: left;
   }
 
@@ -604,7 +589,7 @@ def saveHTML(movies, filePath):
   }
 
   .headerFilm {
-      width: 620px;
+      width: 1280px;
       padding: 20px 20px 20px 15px;
       position: relative;
   }
@@ -614,26 +599,26 @@ def saveHTML(movies, filePath):
       vertical-align: middle;
       padding-left: 0px;
       margin: 5px 0;
-      font-size: 25px;
+      font-size: 40px;
       font-weight: normal;
   }
 
   H1 {
-      font-size: 25px;
+      font-size: 40px;
       font-weight: normal;
       color: #000;
   }
 
   .headerFilm > span {
       color: #666;
-      font-size: 13px;
+      font-size: 30px;
   }
 
   .film-img-box {
       margin-left: 0;
       position: relative;
       left: -12px;
-      min-height: 205px;
+      min-height: 520px;
       margin-bottom: 15px;
   }
 
@@ -642,11 +627,11 @@ def saveHTML(movies, filePath):
   }
 
   .photoBlock {
-      width: 210px;
+      width: 360px;
       padding: 0 0 0 0;
       float: left;
       position: relative;
-      font-size: 11px;
+      font-size: 20px;
   }
 
   .movie-buttons-container {
@@ -660,21 +645,21 @@ def saveHTML(movies, filePath):
       -moz-appearance: none;
       appearance: none;
       background-color: #f60;
-      border-radius: 3px;
+      border-radius: 8px;
       color: #fff;
       display: block;
-      font: 12px Arial, sans-serif;
+      font: 22px Arial, sans-serif;
       font-weight: normal;
       line-height: normal;
       font-weight: bold;
-      height: 35px;
-      line-height: 36px;
+      height: 55px;
+      line-height: 56px;
       -webkit-transition: background-color 0.1s, color 0.1s, border-color 0.1s;
       -moz-transition: background-color 0.1s, color 0.1s, border-color 0.1s;
       transition: background-color 0.1s, color 0.1s, border-color 0.1s;
       text-align: center;
       text-decoration: none;
-      width: 160px;
+      width: 280px;
       margin: 10px 0 10px 15px;
       display:inline-block;
   }
@@ -685,7 +670,7 @@ def saveHTML(movies, filePath):
   }
 
   .infoTable .info {
-      width: 465px;
+      width: 900px;
   }
 
   .info, .info * {
@@ -700,7 +685,7 @@ def saveHTML(movies, filePath):
 
   .info .type {
       color: #f60;
-      width: 119px;
+      width: 169px;
       padding-left: 23px;
   }
 
@@ -713,7 +698,7 @@ def saveHTML(movies, filePath):
 
   td {
       font-family: tahoma,verdana,arial;
-      font-size: 11px;
+      font-size: 14px;
       color: #000;
   }
 
@@ -725,10 +710,10 @@ def saveHTML(movies, filePath):
       z-index: 5;
       box-shadow: none;
       color: #fff;
-      width: 32px;
-      font-size: 11px;
+      width: 54px;
+      font-size: 25px;
       font-weight: 600;
-      line-height: 13px;
+      line-height: 35px;
       padding: 3px 0 2px;
       text-align: center;
       font-family: Arial,Tahoma,Verdana,sans-serif;
@@ -745,27 +730,21 @@ function sortElements(sortType){
             items.push(container.childNodes[i]);
     }
     
-    if(sortType === "torrentDate") {
+    if(sortType === 1) {
     items.sort(function(a, b){
-       var aDate = new Date(a.getAttribute('data-torrentDate'));
-       var bDate = new Date(b.getAttribute('data-torrentDate'));
-       return (Number(bDate) - Number(aDate));
+       return (Math.round(parseFloat(b.getAttribute('date-rating'))*10) - Math.round(parseFloat(a.getAttribute('date-rating'))*10));
     });
-    } else if(sortType === "releaseDate") {
+    } else if(sortType === 2) {
     items.sort(function(a, b){
        var aDate = new Date(a.getAttribute('data-releaseDate'));
        var bDate = new Date(b.getAttribute('data-releaseDate'));
        return (Number(bDate) - Number(aDate));
     });
-    } else if(sortType === "comboDate") {
-    items.sort(function(a, b){
-       var aDate = new Date(a.getAttribute('data-comboDate'));
-       var bDate = new Date(b.getAttribute('data-comboDate'));
-       return (Number(bDate) - Number(aDate));
-    });
     } else {
     items.sort(function(a, b){
-       return (Math.round(parseFloat(b.getAttribute('data-rating'))*10) - Math.round(parseFloat(a.getAttribute('data-rating'))*10));
+       var aDate = new Date(a.getAttribute('data-torrentDate'));
+       var bDate = new Date(b.getAttribute('data-torrentDate'));
+       return (Number(bDate) - Number(aDate));
     });
     }
     
@@ -775,44 +754,34 @@ function sortElements(sortType){
 }
 
 function sortRating(){
-    sortElements("rating");
+    sortElements(1);
     document.getElementById("sortButton2").style.color = "black";
     document.getElementById("sortButton3").style.color = "black";
-    document.getElementById("sortButton4").style.color = "black";
     document.getElementById("sortButton1").style.color = "#f60";
 }
 
 function sortTorrentsDate(){
-    sortElements("torrentDate");
+    sortElements(3);
     document.getElementById("sortButton1").style.color = "black";
     document.getElementById("sortButton2").style.color = "black";
-    document.getElementById("sortButton4").style.color = "black";
     document.getElementById("sortButton3").style.color = "#f60";
 }
 
 function sortReleaseDate(){
-    sortElements("releaseDate");
+    sortElements(2);
     document.getElementById("sortButton1").style.color = "black";
     document.getElementById("sortButton3").style.color = "black";
-    document.getElementById("sortButton4").style.color = "black";
     document.getElementById("sortButton2").style.color = "#f60";
-}
-function sortComboDate(){
-    sortElements("comboDate");
-    document.getElementById("sortButton1").style.color = "black";
-    document.getElementById("sortButton3").style.color = "black";
-    document.getElementById("sortButton2").style.color = "black";
-    document.getElementById("sortButton4").style.color = "#f60";
 }
 </script>
 </head>
 <body>
   <div class="shadow">
     <div class="sbb">
-      <button id="sortButton1" class="sButton" onclick="sortRating()">по рейтингу</button>
+	DateTimeNow
+	  <button id="sortButton1" class="sButton" onclick="sortRating()">по рейтингу</button>
       <button id="sortButton2" class="sButton" onclick="sortReleaseDate()">по дате цифрового релиза</button>
       <button id="sortButton3" class="sButton" onclick="sortTorrentsDate()">по дате торрент-релиза</button>
-      <button id="sortButton4" class="sButton" onclick="sortComboDate()">по комбинированной дате</button>
     </div>
     <div class="block1" style="background-color: #f2f2f2;">"""
 	descriptionTemplate = """
@@ -825,7 +794,7 @@ function sortComboDate(){
                   </td>
                 </tr>"""
 	buttonsTemplate = """          <button class="torrentbutton" style="" onclick="location.href='{}'">{}</button>"""
-	movieTemplate = """      <div class="block2" data-releaseDate="{}" data-torrentDate="{}" data-rating="{}" data-comboDate="{}">
+	movieTemplate = """      <div class="block2" data-releaseDate="{}" data-torrentDate="{}" date-rating="{}">
         <div class="photoInfoTable">
           <div class="headerFilm">
             <h1 class="moviename" itemprop="name">{}</h1>
@@ -834,7 +803,7 @@ function sortComboDate(){
           <div class="photoBlock">
             <div class="film-img-box">
               <div class="film-rating" style="background-color: {};">{}</div> <!-- #3bb33b > 7 #aaa; -->
-              <img src="{}" alt="{}" itemprop="image" width="205"></img>
+              <img src="{}" alt="{}" itemprop="image" width="360"></img>
             </div>
           </div>
           <div class="infoTable">
@@ -867,10 +836,10 @@ function sortComboDate(){
 			elif int(movie["ratingAgeLimits"]) <= 12:
 				descriptionBlock += descriptionTemplate.format("возраст", "от 12 лет")
 			elif int(movie["ratingAgeLimits"]) <= 16:
-				descriptionBlock += descriptionTemplate.format("возраст", "от 16 лет")
+				descriptionBlock += descriptionTemplate.format("возраст", "<B>от 16 лет</B>")
 			elif int(movie["ratingAgeLimits"]) <= 18:
-				descriptionBlock += descriptionTemplate.format("возраст", "от 18 лет")
-		#descriptionBlock += descriptionTemplate.format("возраст", movie["ratingAgeLimits"] + " и старше")
+				descriptionBlock += descriptionTemplate.format("возраст", "<B>от 18 лет</B>")
+		#descriptionBlock += descriptionTemplate.format("возраст", movie["ratingAgeLimits"] + " и старше</B>")
 		descriptionBlock += descriptionTemplate.format("продолжительность", movie["filmLength"])
 		if len(movie["ratingKP"]) > 0:
 			rKP = movie["ratingKP"]
@@ -903,7 +872,7 @@ function sortComboDate(){
 		elif movie["ratingFloat"] < 5.5:
 			ratingColor = "#b43c3c"
 			
-		html += movieTemplate.format(movie["releaseDate"].strftime("%Y-%m-%d"), movie["torrentsDate"].strftime("%Y-%m-%d"), movie["rating"], movie["comboDate"].strftime("%Y-%m-%d"), movie["nameRU"], displayOrigName, movie["nameOriginal"], ratingColor, movie["rating"], movie["posterURL"], movie["nameRU"], descriptionBlock, buttonsBlock)
+		html += movieTemplate.format(movie["releaseDate"].strftime("%Y-%m-%d"), movie["torrentsDate"].strftime("%Y-%m-%d"), movie["rating"], movie["nameRU"], displayOrigName, movie["nameOriginal"], ratingColor, movie["rating"], movie["posterURL"], movie["nameRU"], descriptionBlock, buttonsBlock)
 		
 	html += """    </div>
   </div>
@@ -934,18 +903,14 @@ def main():
 		detail["releaseDate"] = release["releaseDate"]
 		detail["torrents"] = torrents
 		detail["torrentsDate"] = dates[0]
-		detail["comboDate"] = max(release["releaseDate"], dates[0])
-		#print(detail["comboDate"])
 		movies.append(detail)
 	
-	if (SORT_TYPE == "releaseDate"):
-		movies.sort(key = operator.itemgetter("releaseDate"), reverse = True)
+	if (SORT_TYPE == "rating"):
+		movies.sort(key = operator.itemgetter("ratingFloat"), reverse = True)
 	elif (SORT_TYPE == "torrentsDate"):
 		movies.sort(key = operator.itemgetter("torrentsDate"), reverse = True)
-	elif (SORT_TYPE == "comboDate"):
-		movies.sort(key = operator.itemgetter("comboDate"), reverse = True)
 	else:
-		movies.sort(key = operator.itemgetter("ratingFloat"), reverse = True)
+		movies.sort(key = operator.itemgetter("releaseDate"), reverse = True)
 	
 	saveHTML(movies, HTML_SAVE_PATH)
 	
