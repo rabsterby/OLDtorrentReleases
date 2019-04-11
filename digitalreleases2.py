@@ -17,11 +17,11 @@ import http.cookiejar
 import sys
 
 LOAD_DAYS = 60
-USE_MAGNET = True
+USE_MAGNET = False
 SORT_TYPE = "torrentsDate" #rating #torrentsDate
 MIN_VOTES_KP = 500
 MIN_VOTES_IMDB = 1500
-HTML_SAVE_PATH = "/opt/share/www/releases.html"
+HTML_SAVE_PATH = "/var/www/html/releases2.html"
 
 SOCKS5_IP = ""
 SOCKS5_PORT = 9050
