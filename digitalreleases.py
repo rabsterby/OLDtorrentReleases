@@ -777,6 +777,7 @@ function sortReleaseDate(){
 </head>
 <body>
   <div class="shadow">
+  <a href="/index.html" <button class="torrentbutton" style="">на Главную</button></a>
     <div class="sbb">
       <button id="sortButton1" class="sButton" onclick="sortRating()">по рейтингу</button>
       <button id="sortButton2" class="sButton" onclick="sortReleaseDate()">по дате цифрового релиза</button>
