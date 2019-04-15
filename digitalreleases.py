@@ -778,8 +778,7 @@ function sortReleaseDate(){
 <body>
   <div class="shadow">
     <div class="sbb">
-	DateTimeNow
-	  <button id="sortButton1" class="sButton" onclick="sortRating()">по рейтингу</button>
+      <button id="sortButton1" class="sButton" onclick="sortRating()">по рейтингу</button>
       <button id="sortButton2" class="sButton" onclick="sortReleaseDate()">по дате цифрового релиза</button>
       <button id="sortButton3" class="sButton" onclick="sortTorrentsDate()">по дате торрент-релиза</button>
     </div>
