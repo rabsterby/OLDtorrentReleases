@@ -17,11 +17,11 @@ import http.cookiejar
 import sys
 
 LOAD_DAYS = 60
-USE_MAGNET = False
+USE_MAGNET = True
 SORT_TYPE = "torrentsDate" #rating #torrentsDate
 MIN_VOTES_KP = 500
 MIN_VOTES_IMDB = 1500
-HTML_SAVE_PATH = "/var/www/html/releases2.html"
+HTML_SAVE_PATH = "/opt/share/www/releases.html"
 
 SOCKS5_IP = ""
 SOCKS5_PORT = 9050
@@ -1291,6 +1291,7 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       width: 100%;
       position: relative;
   }
+
   body {
       background: #e6e6e6;
       color: #333;
@@ -1298,9 +1299,11 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       margin: 0;
       padding: 0 0 22px 0;
   }
+
   * {
       outline: 0;
   }
+
   .shadow {
       box-shadow: 0px 10px 20px 0px rgba(0, 0, 0, 0.2);
       width: 850px;
@@ -1308,6 +1311,7 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       position: relative;
       z-index: 1;
   }
+
   .block1 {
       width: 850px;
       position: relative;
@@ -1350,30 +1354,38 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       background-color: #f2f2f2;
       width: 100%;
   }
+
   .block2::before, .block2::after {
       content: "";
       display: table;
   }
+
   .block2::after, .photoInfoTable::after {
       clear: both;
   }
+
   .photoInfoTable::before, .photoInfoTable::after {
       content: "";
       display: table;
   }
+
   .photoInfoTable {
       width: 850px;
       float: left;
   }
+
   .headerFilm h1 {
       margin: 0;
       padding: 0;
   }
+
   .headerFilm {
       width: 820px;
       padding: 20px 15px 20px 15px;
       position: relative;
   }
+
+
   H1.moviename {
       vertical-align: middle;
       padding-left: 0px;
@@ -1381,15 +1393,18 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       font-size: 25px;
       font-weight: normal;
   }
+
   H1 {
       font-size: 25px;
       font-weight: normal;
       color: #000;
   }
+
   .headerFilm > span {
       color: #666;
       font-size: 13px;
   }
+
   .film-img-box {
       margin-left: 0;
       position: relative;
@@ -1397,9 +1412,11 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       min-height: 205px;
       margin-bottom: 15px;
   }
+
   .film-img-box img {
       border: 0;
   }
+
   .photoBlock {
       width: 223px;
       padding: 0 0 0 0;
@@ -1407,9 +1424,11 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       position: relative;
       font-size: 11px;
   }
+
   .movie-buttons-container {
       margin-bottom: 20px;
   }
+
   .torrentbutton {
       cursor: pointer;
       border: none;
@@ -1462,6 +1481,7 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       background-size: 10px 10px;
       background-position: 3px 3px;
   }
+
   .trailersbutton {
       cursor: pointer;
       border: none;
@@ -1487,39 +1507,47 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
       margin: 10px 0 10px 15px;
       display:inline-block;
   }
+
   .infoTable {
       float: left;
       display: block;
   }
+
   .infoTable .info {
       width: 610px;
   }
+
   .info, .info * {
       border-collapse: collapse;
       margin: 0;
       padding: 0;
   }
+
   .info tr {
       border-bottom: #DFDFDF solid 1px; 
       font-family: tahoma,verdana,arial;
       font-size: 13px;
   }
+
   .info .type {
       color: #f60;
       width: 140px;
       padding-left: 27px;
   }
+
   .info td {
       min-height: 14px;
       vertical-align: top;
       padding-bottom: 9px;
       padding: 6px 0 6px 20px;
   }
+
   td {
       font-family: tahoma,verdana,arial;
       font-size: 13px;
       color: #000;
   }
+
   .film-rating {
       border-radius: 1px;
       position: absolute;
@@ -1557,6 +1585,7 @@ def saveHTML(movies, filePath, useMagnet=USE_MAGNET):
 function sortElements(sortType){
     var container = document.getElementsByClassName('block1')[0];
     var newContainer = container.cloneNode(false);
+
     var items = [];
     for(var i = container.childNodes.length; i--;){
         if(container.childNodes[i].nodeName === 'DIV')
@@ -1579,6 +1608,7 @@ function sortElements(sortType){
         newContainer.appendChild(items[i]);
     container.parentNode.replaceChild(newContainer, container);
 }
+
 function sortRating(){
     element = document.getElementById("sortButton1");
     style = getComputedStyle(element);
@@ -1589,6 +1619,7 @@ function sortRating(){
     document.getElementById("sortButton2").style.color = "black";
     document.getElementById("sortButton1").style.color = "#f60";
 }
+
 function sortTorrentsDate(){
     element = document.getElementById("sortButton2");
     style = getComputedStyle(element);
@@ -1603,7 +1634,6 @@ function sortTorrentsDate(){
 </head>
 <body>
   <div class="shadow">
-	<a href="/index.html" <button class="torrentbutton" style="">на Главную</button></a>
     <div class="sbb">
       <button id="sortButton1" class="sButton" onclick="sortRating()">по рейтингу</button>
       <button id="sortButton2" class="sButton" onclick="sortTorrentsDate()">по дате торрент-релиза</button>
