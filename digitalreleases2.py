@@ -21,7 +21,7 @@ USE_MAGNET = True
 SORT_TYPE = "torrentsDate" #rating #torrentsDate
 MIN_VOTES_KP = 500
 MIN_VOTES_IMDB = 1500
-HTML_SAVE_PATH = "/opt/share/www/releases.html"
+HTML_SAVE_PATH = "/var/www/html/movies/releases.html"
 
 SOCKS5_IP = ""
 SOCKS5_PORT = 9050
